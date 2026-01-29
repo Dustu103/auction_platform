@@ -172,7 +172,7 @@ function App() {
                             <div className="card-content">
                                 <h2 className="card-title">{item.title}</h2>
 
-                                <Countdown endTime={item.endTime} serverOffset={serverOffset} />
+                                <Countdown endTime={item.end_time} serverOffset={serverOffset} />
 
                                 <div className="price-tag">
                                     <span style={{ color: isWinning ? 'var(--success)' : 'inherit' }}>
@@ -183,7 +183,7 @@ function App() {
                                 <button
                                     className="btn-bid"
                                     onClick={() => handleBid(item)}
-                                    disabled={Date.now() + serverOffset > item.endTime}
+                                    disabled={Date.now() + serverOffset > item.end_time}
                                 >
                                     Bid +$10
                                 </button>

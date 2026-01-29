@@ -21,31 +21,22 @@ const io = new Server(httpServer, {
 // In a real app, this would come from the DB.
 // We set dynamic end times relative to server start for demo purposes.
 const now = Date.now();
-const ITEMS = [
-    { id: '1', title: 'Vintage Camera (Leica M3)', startPrice: 100, endTime: now + 1000 * 60 * 5, image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=400&q=80' },
-    { id: '2', title: 'MacBook Pro Prototype', startPrice: 500, endTime: now + 1000 * 60 * 10, image: '/macbook_prototype.png' },
-    { id: '3', title: 'SpaceX Starship Model', startPrice: 1000, endTime: now + 1000 * 60 * 15, image: 'https://images.unsplash.com/photo-1517976487492-5750f3195933?auto=format&fit=crop&w=400&q=80' },
-];
-
-// Seed Redis with initial prices if missing
-ITEMS.forEach(async (item) => {
-    const key = `item:${item.id}:price`;
-    const exists = await redis.exists(key);
-    if (!exists) {
-        await redis.set(key, item.startPrice);
-    }
-});
-
 // --- REST API ---
 
 app.get('/items', async (req, res) => {
     try {
-        const itemsWithState = await Promise.all(ITEMS.map(async (item) => {
+        const result = await pool.query('SELECT * FROM items ORDER BY end_time ASC');
+        const items = result.rows;
+
+        const itemsWithState = await Promise.all(items.map(async (item) => {
             const currentPrice = await redis.get(`item:${item.id}:price`);
             const winner = await redis.get(`item:${item.id}:price:winner`);
             return {
                 ...item,
-                currentPrice: Number(currentPrice || item.startPrice),
+                // Ensure numbers for frontend
+                start_price: Number(item.start_price),
+                end_time: Number(item.end_time),
+                currentPrice: Number(currentPrice || item.start_price),
                 lastBidder: winner
             };
         }));
@@ -55,6 +46,7 @@ app.get('/items', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch items' });
     }
 });
+
 
 app.get('/time', (req, res) => {
     res.json({ serverTime: Date.now() });
@@ -71,9 +63,17 @@ io.on('connection', (socket) => {
         const ts = Date.now();
 
         // Validate basic expiration
-        const item = ITEMS.find(i => i.id === itemId);
-        if (!item || Date.now() > item.endTime) {
-            socket.emit('bid_error', { itemId, message: 'Auction ended!' });
+        // Validate basic expiration
+        let item;
+        try {
+            const dbRes = await pool.query('SELECT * FROM items WHERE id = $1', [itemId]);
+            item = dbRes.rows[0];
+        } catch (err) {
+            console.error("Error fetching item for bid:", err);
+        }
+
+        if (!item || Date.now() > Number(item.end_time)) {
+            socket.emit('bid_error', { itemId, message: 'Auction ended or invalid item!' });
             return;
         }
 
