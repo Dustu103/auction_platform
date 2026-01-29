@@ -2,11 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import io from 'socket.io-client'
 import { motion, AnimatePresence } from 'framer-motion'
 
-// Docker compatibility: use window.location if served from same origin, or default to localhost:3000
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const socket = io(API_URL);
 
-// Generate a random User ID for the session
 const USER_ID = 'user_' + Math.floor(Math.random() * 10000);
 
 const Countdown = ({ endTime, serverOffset }) => {
@@ -14,11 +12,10 @@ const Countdown = ({ endTime, serverOffset }) => {
 
     useEffect(() => {
         const timer = setInterval(() => {
-            // Current Server Time = Date.now() + serverOffset
             const now = Date.now() + serverOffset;
             const diff = endTime - now;
             setTimeLeft(diff > 0 ? diff : 0);
-        }, 100); // 10Hz update for smoothness
+        }, 100);
 
         return () => clearInterval(timer);
     }, [endTime, serverOffset]);
@@ -27,7 +24,7 @@ const Countdown = ({ endTime, serverOffset }) => {
         if (ms <= 0) return "CLOSED";
         const m = Math.floor(ms / 60000);
         const s = Math.floor((ms % 60000) / 1000);
-        const msParts = Math.floor((ms % 1000) / 100); // Tenths
+        const msParts = Math.floor((ms % 1000) / 100);
         return `${m}:${s.toString().padStart(2, '0')}.${msParts}`;
     };
 
@@ -44,7 +41,6 @@ function App() {
     const [bidError, setBidError] = useState(null);
 
     useEffect(() => {
-        // 1. Time Synchronization
         fetch(`${API_URL}/time`)
             .then(res => res.json())
             .then(data => {
@@ -53,32 +49,27 @@ function App() {
             })
             .catch(console.error);
 
-        // 2. Load Initial Items
         fetch(`${API_URL}/items`)
             .then(res => res.json())
             .then(setItems)
             .catch(console.error);
-
-        // 3. Socket Event Listeners
         socket.on('connect', () => {
             console.log('Connected to socket');
         });
 
         socket.on('update_bid', (data) => {
-            // data: { itemId, price, winner }
             setItems(prevItems => prevItems.map(item => {
                 if (item.id === data.itemId) {
                     return {
                         ...item,
                         currentPrice: data.price,
                         lastBidder: data.winner,
-                        flash: 'green' // Trigger green flash
+                        flash: 'green'
                     };
                 }
                 return item;
             }));
 
-            // Clear flash after animation
             setTimeout(() => {
                 setItems(prevItems => prevItems.map(item => {
                     if (item.id === data.itemId) return { ...item, flash: null };
@@ -88,10 +79,8 @@ function App() {
         });
 
         socket.on('bid_error', (data) => {
-            // data: { itemId, message }
             setBidError(data.message);
 
-            // If outbid, flash red on that item
             setItems(prevItems => prevItems.map(item => {
                 if (item.id === data.itemId) {
                     return { ...item, flash: 'red' };
@@ -111,9 +100,6 @@ function App() {
     const handleBid = (item) => {
         const bidStep = 10;
         const newAmount = item.currentPrice + bidStep;
-
-        // Optimistic UI? No, wait for server response to guarantee truth.
-        // The "Glass-to-glass" latency is the key metric here.
 
         socket.emit('place_bid', {
             itemId: item.id,
@@ -149,7 +135,7 @@ function App() {
             <div className="auction-grid">
                 {items.map(item => {
                     const isWinning = item.lastBidder === USER_ID;
-                    const isOutbid = !isWinning && item.lastBidder; // Someone else is clicking
+                    const isOutbid = !isWinning && item.lastBidder;
 
                     return (
                         <motion.div
