@@ -1,0 +1,49 @@
+
+
+services:
+  # Authority Layer (In-Memory)
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+
+  # Persistence Layer (Archival)
+  postgres:
+    image: postgres:alpine
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: auction
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Backend (Socket + Stream Worker)
+  server:
+    build: ./server
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://user:password@postgres:5432/auction
+      - NODE_ENV=development
+    depends_on:
+      - redis
+      - postgres
+
+  # Frontend
+  client:
+    build: ./client
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
